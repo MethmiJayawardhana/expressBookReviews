@@ -11,7 +11,33 @@ app.use(express.json());
 app.use("/customer",session({secret:"fingerprint_customer",resave: true, saveUninitialized: true}))
 
 app.use("/customer/auth/*", function auth(req,res,next){
-//Write the authenication mechanism here
+	let accessToken;
+
+	// Prefer session-stored access token
+	if (req.session && req.session.authorization && req.session.authorization.accessToken) {
+		accessToken = req.session.authorization.accessToken;
+	}
+
+	// Fallback to Authorization header: Bearer <token>
+	if (!accessToken && req.headers && req.headers.authorization) {
+		const authHeader = req.headers.authorization;
+		if (authHeader.startsWith('Bearer ')) {
+			accessToken = authHeader.slice(7);
+		}
+	}
+
+	if (!accessToken) {
+		return res.status(401).json({message: 'User not logged in'});
+	}
+
+	try {
+		const decoded = jwt.verify(accessToken, 'access');
+		// attach username for downstream handlers
+		req.user = decoded.username;
+		next();
+	} catch (err) {
+		return res.status(401).json({message: 'Invalid access token'});
+	}
 });
  
 const PORT =5000;
